@@ -5,6 +5,7 @@ from asgiref.sync import async_to_sync
 from channels.generic.websocket import WebsocketConsumer
 from django.core.files.base import ContentFile
 from django.db.models import Q, Exists, OuterRef
+from django.db.models.functions import Coalesce
 
 from .models import User, Connection, Message
 
@@ -88,12 +89,22 @@ class ChatConsumer(WebsocketConsumer):
 
     def receive_friend_list(self, data):
         user = self.scope['user']
-
+        # Latest message subquery
+        latest_message = Message.objects.filter(OuterRef('id')).order_by('-created')[:1]
         # Get all connections
         connections = Connection.objects.filter(Q(receiver=user) | Q(sender=user), accepted=True)
         
         # Serialize connections
-        serialized = FriendSerializer(connections, context={ 'user': user }, many=True)
+        serialized = FriendSerializer(
+            connections, 
+            context={ 'user': user }, 
+            many=True
+        ).annotate(
+            latest_text    = latest_message.values('text'), 
+            latest_created = latest_message.values('created')
+        ).order_by(
+            Coalesce('latest_created', 'updated').desc()
+        )
         # Send back to sender
         self.send_group(user.username, 'friend.list', serialized.data)
 

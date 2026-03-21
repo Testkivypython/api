@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useState } from 'react'
-import { Keyboard, Platform, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View, InputAccessoryView, FlatList } from 'react-native'
+import { Keyboard, Platform, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View, InputAccessoryView, FlatList, KeyboardAvoidingView } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import Thumbnail from '../common/Thumbnail'
 import { FontAwesomeIcon } from '@fortawesome/react-native-fontawesome'
