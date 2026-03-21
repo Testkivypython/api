@@ -139,8 +139,6 @@ class ChatConsumer(WebsocketConsumer):
         #Send back to the requestor
         self.send_group(user.username, 'message.list', data)
 
-
-
     def receive_message_send(self, data):
         user = self.scope['user']
         connectionID = data.get('connectionID')
@@ -183,6 +181,7 @@ class ChatConsumer(WebsocketConsumer):
 
     def receive_request_accept(self, data):
         username = data.get('username')
+
         # Fetch  connection object
         try:
             connection = Connection.objects.get(sender__username=username, receiver=self.scope['user'])
@@ -190,14 +189,25 @@ class ChatConsumer(WebsocketConsumer):
         except Connection.DoesNotExist:
             print('Error: Connection not found')
             return
+
         # Update connections
         connection.accepted = True
         connection.save()
+
         # Serialize connections
         serialized = RequestSerializer(connection)
+
         # Send back to users
         self.send_group(connection.sender.username, 'request.accept', serialized.data)
         self.send_group(connection.receiver.username, 'request.accept', serialized.data)
+
+        # Send new friend object to the sender
+        serialized_friend = FriendSerializer(connection, constext={ 'user': connection.sender })
+        self.send_group(connection.sender.username, 'friend.new', serialized_friend.data)
+
+        # Send new friend object to the receiver
+        serialized_friend = FriendSerializer(connection, constext={ 'user': connection.receiver })
+        self.send_group(connection.receiver.username, 'friend.new', serialized_friend.data)
 
     def receive_request_list(self, data):
         user = self.scope['user']

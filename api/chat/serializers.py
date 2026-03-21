@@ -115,12 +115,16 @@ class FriendSerializer(serializers.ModelSerializer):
             print('Error: No user found in friend serializer')
 
     def get_preview(self, obj):
-        if not obj.latest_text:
+        if not hasattr(obj, 'latest_text'):
             return 'New connection'
         return obj.latest_text
 
     def get_updated(self, obj):
-        date = obj.latest_created or obj.updated
+        if not hasattr(obj, 'latest_created'):
+            date = obj.updated
+        else:
+            date = obj.latest_created or obj.updated
+        
         return date.isoformat()
 
 
