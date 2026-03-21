@@ -1,8 +1,8 @@
 import axios from 'axios'
 import { Platform } from 'react-native'
 
-// export const ADDRESS = Platform.OS === 'ios' ? 'localhost:8000' : '10.0.2.2:8000'
-export const ADDRESS = 'maxzak96.beget.tech'
+export const ADDRESS = Platform.OS === 'ios' ? 'localhost:8000' : '10.0.2.2:8000'
+// export const ADDRESS = 'maxzak96.beget.tech'
 
 const API = axios.create({
     baseURL: 'http://' + ADDRESS,

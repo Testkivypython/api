@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Connection, User
+from .models import Connection, User, Message
 
 class SignUpSerializer(serializers.ModelSerializer):
     class Meta:
@@ -115,3 +115,18 @@ class FriendSerializer(serializers.ModelSerializer):
 
     def get_preview(self, obj):
         return 'New connection'
+
+class MessageSerializer(serializers.ModelSerializer):
+    is_me = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Message
+        fields = [
+            'id',
+            'text',
+            'created',
+            'is_me'
+        ]
+    
+    def get_is_me(self, obj):
+        return self.context['user'] == obj.user

@@ -6,9 +6,15 @@ from channels.generic.websocket import WebsocketConsumer
 from django.core.files.base import ContentFile
 from django.db.models import Q, Exists, OuterRef
 
-from .models import User, Connection
+from .models import User, Connection, Message
 
-from .serializers import UserSerializer, SearchSerializer, RequestSerializer, FriendSerializer
+from .serializers import ( 
+    UserSerializer, 
+    SearchSerializer, 
+    RequestSerializer, 
+    FriendSerializer,
+    MessageSerializer
+)
 
 class ChatConsumer(WebsocketConsumer):
 
@@ -52,6 +58,14 @@ class ChatConsumer(WebsocketConsumer):
         if data_source == 'friend.list':
             self.receive_friend_list(data)
 
+        # Message list
+        elif data_source == 'message.list': 
+            self.receive_message_list(data)
+
+        # Message has been sent
+        elif data_source == 'message.send':
+            self.receive_message_send(data)
+
         # Request connected (accept)
         elif data_source == 'request.accept':
             self.receive_request_accept(data)
@@ -82,6 +96,79 @@ class ChatConsumer(WebsocketConsumer):
         serialized = FriendSerializer(connections, context={ 'user': user }, many=True)
         # Send back to sender
         self.send_group(user.username, 'friend.list', serialized.data)
+
+    def receive_message_list(self, data):
+        user = self.scope['user']
+        connectionID = data.get('connectionID')
+        page = data.get('page')
+
+        try: 
+            connection = Connection.objects.get(id=connectionID)
+        except Connection.DoesNotExist:
+            print('Error: Connection not found')
+            return
+
+        # Get messages
+        messages = Message.objects.filter(connection=connection).order_by('-created')
+        # serialize messages
+        serialized_message = MessageSerializer(messages, context={ 'user': user }, many=True)
+
+        # get recipient friend
+        recipient = connection.sender
+        if connection.sender == user:
+            recipient = connection.receiver
+        
+        # Serialize recipient friend
+        serialized_friend = UserSerializer(recipient)
+
+        data = {
+            'messages': serialized_message.data,
+            'friend': serialized_friend.data
+        }
+        #Send back to the requestor
+        self.send_group(user.username, 'message.list', data)
+
+
+
+    def receive_message_send(self, data):
+        user = self.scope['user']
+        connectionID = data.get('connectionID')
+        message_text = data.get('message')
+
+        try: 
+            connection = Connection.objects.get(id=connectionID)
+        except Connection.DoesNotExist:
+            print('Error: Connection not found')
+            return       
+
+        message = Message.objects.create(
+            connection=connection,
+            user=user,
+            text=message_text
+        )
+
+        # get recipient friend
+        recipient = connection.sender
+        if connection.sender == user:
+            recipient = connection.receiver
+
+        # Send new message back to sender
+        serialized_message = MessageSerializer(message, context={ 'user': user })
+        serialized_friend = UserSerializer(recipient)
+        data = {
+            'messages': serialized_message.data,
+            'friend': serialized_friend.data
+        }
+        self.send_group(user.username, 'message.send', data)
+
+        # Send new message to receiver
+        serialized_message = MessageSerializer(message, context={ 'user': recipient })
+        serialized_friend = UserSerializer(user)
+        data = {
+            'messages': serialized_message.data,
+            'friend': serialized_friend.data
+        }
+        self.send_group(recipient.username, 'message.send', data)
 
     def receive_request_accept(self, data):
         username = data.get('username')

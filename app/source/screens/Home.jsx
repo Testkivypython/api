@@ -57,10 +57,6 @@ function HomeScreen({ navigation }) {
                     <FontAwesomeIcon icon={icon} color={color} size={28} />
                 )
             },
-            tabBarStyle: {
-                margin: 10,
-                borderRadius: 10
-            },
             tabBarActiveTintColor: '#202020',
             tabBarShowLabel: false
         })}>

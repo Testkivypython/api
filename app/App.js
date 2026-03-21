@@ -3,7 +3,7 @@ import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
 import { useState } from 'react';
 import './source/core/fontawesome';
 import { useEffect } from 'react';
-     
+
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 
 import SplashScreen from './source/screens/Splash';
