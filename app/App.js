@@ -29,8 +29,10 @@ const LightTheme = {
 export default function App() {
   const initialized = useGlobal((state) => state.initialized);  
   const authenticated = useGlobal((state) => state.authenticated);
-
+  
   const init = useGlobal((state) => state.init);
+  
+  console.log('App render - initialized:', initialized, 'authenticated:', authenticated)
 
   useEffect(() => {
     init();

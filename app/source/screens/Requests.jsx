@@ -1,4 +1,5 @@
 import { Text, ActivityIndicator, View, FlatList, TouchableOpacity } from 'react-native'
+import { useEffect, useState } from 'react'
 import useGlobal from '../core/global'
 import Empty from '../common/Empty'
 import Cell from '../common/Cell'
@@ -28,13 +29,12 @@ function RequestAccept({ item }) {
 }
 
 
-function RequestRow({ item }) {
+function RequestRow({ item, refreshKey }) {
     const message = 'Requested to connect with you'
-    const time = '7m ago'
 
     return (
         <Cell>
-            <Thumbnail url={item.sender.thumbnail} size= {76} />
+            <Thumbnail url={item.sender.thumbnail} size= {76} refreshKey={refreshKey} />
             <View style = {{ flex: 1, paddingHorizontal: 16 }}>
                 <Text style = {{ fontWeight: 'bold', color: '#202020', marginBottom: 4 }}>{item.sender.name}</Text>
                 <Text style = {{ color: '#606060' }}>{message} <Text style = {{ color: '#909090', fontSize: 13 }}>{utils.formatTime(item.created)}</Text></Text>
@@ -46,6 +46,14 @@ function RequestRow({ item }) {
 
 function RequestsScreen() {
     const requestsList = useGlobal((state) => state.requestList)
+    const thumbnailTimestamps = useGlobal(state => state.thumbnailTimestamps)
+    const [refreshKey, setRefreshKey] = useState(0)
+
+    useEffect(() => {
+        if (thumbnailTimestamps && Object.keys(thumbnailTimestamps).length > 0) {
+            setRefreshKey(k => k + 1)
+        }
+    }, [thumbnailTimestamps])
 
     // Show loading indicator
     if (requestsList === null) {
@@ -67,7 +75,7 @@ function RequestsScreen() {
             <FlatList
                 data={requestsList}
                 renderItem={({ item }) => (
-                    <RequestRow item={item} />
+                    <RequestRow item={item} refreshKey={refreshKey} />
                 )}
                 keyExtractor={(item) => item.sender.username}
             />

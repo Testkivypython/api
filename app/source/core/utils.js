@@ -14,14 +14,31 @@ function log(){
     }
 }
 
-function thumbnail(url){
+const thumbnailCache = {}
+function thumbnail(url, forceRefresh = false){
+    if (!url){
+        return ProfileImage;
+    }
+    const cacheKey = url
+    if (forceRefresh && thumbnailCache[cacheKey]) {
+        delete thumbnailCache[cacheKey]
+    }
+    if (!thumbnailCache[cacheKey]) {
+        thumbnailCache[cacheKey] = Date.now()
+    }
+    return {
+        uri: 'https://' + ADDRESS + url + '?t=' + thumbnailCache[cacheKey]
+    }
+}
+
+/*function thumbnail(url){
     if (!url){
         return ProfileImage;
     }
     return {
-        uri: 'http://' + ADDRESS + url
+	uri: 'https://' + ADDRESS + url
     }
-}
+}*/
 
 function formatTime(date) {
     if (date == null) {

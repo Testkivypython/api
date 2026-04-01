@@ -43,7 +43,8 @@ class UserSerializer(serializers.ModelSerializer):
         fields = [
             'username',
             'name',
-            'thumbnail'
+            'thumbnail',
+            'public_key'
         ]
 
     def get_name(self, obj):
@@ -136,9 +137,15 @@ class MessageSerializer(serializers.ModelSerializer):
         fields = [
             'id',
             'text',
+            'text_for_sender',
             'created',
             'is_me'
         ]
     
     def get_is_me(self, obj):
         return self.context['user'] == obj.user
+
+class PublicKeySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['username', 'public_key']

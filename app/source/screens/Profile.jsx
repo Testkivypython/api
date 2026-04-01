@@ -1,6 +1,7 @@
 import { TouchableOpacity, Text, View, StyleSheet, Image } from 'react-native'
 import { FontAwesomeIcon } from '@fortawesome/react-native-fontawesome'
 import * as ImagePicker from 'expo-image-picker';
+import { useState, useEffect } from 'react'
 import useGlobal from '../core/global'
 import utils from '../core/utils'
 import Thumbnail from '../common/Thumbnail'
@@ -29,10 +30,18 @@ const handleImagePress = async ( uploadThumbnail ) => {
 function ProfileImage() {
     const uploadThumbnail = useGlobal(state => state.uploadThumbnail)
     const user = useGlobal(state => state.user)
+    const thumbnailTimestamps = useGlobal(state => state.thumbnailTimestamps)
+    const [refreshKey, setRefreshKey] = useState(0)
+    
+    useEffect(() => {
+        if (thumbnailTimestamps && Object.keys(thumbnailTimestamps).length > 0) {
+            setRefreshKey(k => k + 1)
+        }
+    }, [thumbnailTimestamps])
 
     return (
         <TouchableOpacity style = {styles.buttonImage} onPress = {() => handleImagePress(uploadThumbnail)}>
-            <Thumbnail url={user.thumbnail} size={180} />
+            <Thumbnail url={user.thumbnail} size={180} refreshKey={refreshKey} />
             <View style = {styles.editImage}>
                 <FontAwesomeIcon icon='pencil' color="#d0d0d0" size={15} />
             </View>

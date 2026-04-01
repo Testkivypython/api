@@ -3,7 +3,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import RequestsScreen from './Requests'
 import FriendsScreen from './Friends'
 import ProfileScreen from './Profile'
-import { useLayoutEffect, useEffect } from 'react'
+import { useLayoutEffect, useEffect, useState } from 'react'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import useGlobal from '../core/global'
 import Thumbnail from '../common/Thumbnail'
@@ -14,8 +14,9 @@ const Tab = createBottomTabNavigator()
 
 function HomeScreen({ navigation }) {
     const socketConnect = useGlobal(state => state.socketConnect)
-    const socketClose = useGlobal(state => state.socketClose)
     const user = useGlobal(state => state.user)
+    const thumbnailTimestamps = useGlobal(state => state.thumbnailTimestamps)
+    const [refreshKey, setRefreshKey] = useState(0)
 
     useLayoutEffect(() => {
         navigation.setOptions({
@@ -24,10 +25,13 @@ function HomeScreen({ navigation }) {
     }, [])
 
     useEffect(() => {
-        socketConnect()
-        return () => {
-            socketClose()
+        if (thumbnailTimestamps && Object.keys(thumbnailTimestamps).length > 0) {
+            setRefreshKey(k => k + 1)
         }
+    }, [thumbnailTimestamps])
+
+    useEffect(() => {
+        socketConnect()
     }, [])
 
     function onSearch(){
@@ -38,7 +42,7 @@ function HomeScreen({ navigation }) {
         <Tab.Navigator screenOptions={({ route, navigation }) => ({
             headerLeft: () => (
                 <View style={{ marginLeft: 15 }}>
-                    <Thumbnail url={user.thumbnail} size= {28} />
+                    <Thumbnail url={user.thumbnail} size= {28} refreshKey={refreshKey} />
                 </View>
             ),
             headerRight: () => (

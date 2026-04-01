@@ -65,10 +65,10 @@ function SearchButton({ user }) {
     )
 }
 
-function SearchRow({ user }) {
+function SearchRow({ user, refreshKey }) {
     return (
         <Cell>
-            <Thumbnail url={user.thumbnail} size= {76} />
+            <Thumbnail url={user.thumbnail} size= {76} refreshKey={refreshKey} />
             <View style = {{ flex: 1, paddingHorizontal: 16 }}>
                 <Text style = {{ fontWeight: 'bold', color: '#202020', marginBottom: 4 }}>{user.name}</Text>
                 <Text style = {{ color: '#606060' }}>{user.username}</Text>
@@ -80,9 +80,17 @@ function SearchRow({ user }) {
 
 function SearchScreen() {
     const [query, setQuery] = useState('')
+    const [refreshKey, setRefreshKey] = useState(0)
     
     const searchList = useGlobal(state => state.searchList)
     const searchUsers = useGlobal(state => state.searchUsers)
+    const thumbnailTimestamps = useGlobal(state => state.thumbnailTimestamps)
+
+    useEffect(() => {
+        if (thumbnailTimestamps && Object.keys(thumbnailTimestamps).length > 0) {
+            setRefreshKey(k => k + 1)
+        }
+    }, [thumbnailTimestamps])
 
     useEffect(() => {
         searchUsers(query)
@@ -148,7 +156,7 @@ function SearchScreen() {
                 <FlatList
                     data={searchList}
                     renderItem={({ item }) => (
-                        <SearchRow user={item} />
+                        <SearchRow user={item} refreshKey={refreshKey} />
                     )}
                     keyExtractor={item => (item.username)}
                 />

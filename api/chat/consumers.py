@@ -54,10 +54,14 @@ class ChatConsumer(WebsocketConsumer):
 
         # Pretty print   python dict
         print('receive: ', json.dumps(data, indent=2))
-         
+
         # Get friend list
         if data_source == 'friend.list':
             self.receive_friend_list(data)
+
+        # Send key to user
+        elif data_source == 'dh_public_key':
+            self.receive_dh_public_key(data)
 
         # Message list
         elif data_source == 'message.list': 
@@ -94,23 +98,39 @@ class ChatConsumer(WebsocketConsumer):
     def receive_friend_list(self, data):
         user = self.scope['user']
         # Latest message subquery
-        latest_message = Message.objects.filter(OuterRef('id')).order_by('-created')[:1]
+        latest_message = Message.objects.filter(connection=OuterRef('id')).order_by('-created')[:1]
         # Get all connections
-        connections = Connection.objects.filter(Q(receiver=user) | Q(sender=user), accepted=True)
-        
-        # Serialize connections
-        serialized = FriendSerializer(
-            connections, 
-            context={ 'user': user }, 
-            many=True
+        connections = Connection.objects.filter(
+            Q(receiver=user) | Q(sender=user), 
+            accepted=True
         ).annotate(
             latest_text    = latest_message.values('text'), 
             latest_created = latest_message.values('created')
         ).order_by(
             Coalesce('latest_created', 'updated').desc()
         )
+        
+        # Serialize connections
+        serialized = FriendSerializer(
+            connections, 
+            context={ 'user': user }, 
+            many=True
+        )
         # Send back to sender
         self.send_group(user.username, 'friend.list', serialized.data)
+
+    def receive_dh_public_key(self, data):
+        target_username = data.get('username')
+        user_public_key = data.get('public_key')
+        
+        if not target_username or not user_public_key:
+            return
+        
+        data = {
+            'username': self.username,
+            'public_key': user_public_key
+        }
+        self.send_group(target_username, 'dh_public_key', data)
 
     def receive_message_list(self, data):
         user = self.scope['user']
@@ -165,11 +185,13 @@ class ChatConsumer(WebsocketConsumer):
         if connection.sender == user:
             recipient = connection.receiver
 
-        # Send new message back to sender
+        # Send new message back to sender (with plaintext for display)
         serialized_message = MessageSerializer(message, context={ 'user': user })
+        message_data = serialized_message.data
+        # Use the plaintext we received from client (encrypted with own key)
         serialized_friend = UserSerializer(recipient)
         data = {
-            'message': serialized_message.data,
+            'message': message_data,
             'friend': serialized_friend.data
         }
         self.send_group(user.username, 'message.send', data)
@@ -216,11 +238,11 @@ class ChatConsumer(WebsocketConsumer):
         self.send_group(connection.receiver.username, 'request.accept', serialized.data)
 
         # Send new friend object to the sender
-        serialized_friend = FriendSerializer(connection, constext={ 'user': connection.sender })
+        serialized_friend = FriendSerializer(connection, context={ 'user': connection.sender })
         self.send_group(connection.sender.username, 'friend.new', serialized_friend.data)
 
         # Send new friend object to the receiver
-        serialized_friend = FriendSerializer(connection, constext={ 'user': connection.receiver })
+        serialized_friend = FriendSerializer(connection, context={ 'user': connection.receiver })
         self.send_group(connection.receiver.username, 'friend.new', serialized_friend.data)
 
     def receive_request_list(self, data):
@@ -306,6 +328,24 @@ class ChatConsumer(WebsocketConsumer):
         serialized = UserSerializer(user)
         # Send updates user data including new thumbnail
         self.send_group(self.username, 'thumbnail', serialized.data)
+
+        # Get all friends
+        connections = Connection.objects.filter(
+            Q(sender=user) | Q(receiver=user),
+            accepted=True
+        )
+        
+        # Extract friend usernames
+        friend_usernames = set()
+        for conn in connections:
+            if conn.sender == user:
+                friend_usernames.add(conn.receiver.username)
+            else:
+                friend_usernames.add(conn.sender.username)
+        
+        # Broadcast to all friends
+        for friend_username in friend_usernames:
+            self.send_group(friend_username, 'friend.thumbnail', serialized.data)
 
 
     # -------------------------------
