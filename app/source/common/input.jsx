@@ -1,6 +1,6 @@
 import { Text, TextInput, View, StyleSheet } from 'react-native'
 
-function Input({ title, value, error, setValue, setError, secureTextEntry=false }){
+function Input({ title, value, error, setValue, setError, secureTextEntry=false, keyboardType='default', autoCapitalize='none', maxLength=null }){
     return(
         <View>
 
@@ -13,7 +13,7 @@ function Input({ title, value, error, setValue, setError, secureTextEntry=false 
             </Text>
 
             <TextInput
-                autoCapitalize='none'
+                autoCapitalize={autoCapitalize}
                 autoComplete='off'
                 value = {value} onChangeText = {text => {
                     setValue(text)
@@ -22,6 +22,8 @@ function Input({ title, value, error, setValue, setError, secureTextEntry=false 
                     }
                 }}
                 secureTextEntry = {secureTextEntry}
+                keyboardType={keyboardType}
+                maxLength={maxLength}
                 style = {{
                     backgroundColor: '#e1e2e4',
                     borderRadius: 26,

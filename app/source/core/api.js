@@ -12,28 +12,5 @@ const API = axios.create({
     }
 })
 
-// Add request interceptor to include auth token
-API.interceptors.request.use(
-    async (config) => {
-        const tokens = await secure.get('tokens')
-        // Skip token for signin/signup endpoints
-        const isAuthEndpoint = config.url?.includes('/signin/') || config.url?.includes('/signup/')
-        if (tokens?.access && !isAuthEndpoint) {
-            config.headers.Authorization = `Bearer ${tokens.access}`
-        }
-        return config
-    },
-    (error) => Promise.reject(error)
-)
-
-// Add response interceptor for debugging
-API.interceptors.response.use(
-    (response) => response,
-    (error) => {
-        console.log('API Error - status:', error.response?.status)
-        console.log('API Error - data:', error.response?.data)
-        return Promise.reject(error)
-    }
-)
 
 export default API

@@ -59,10 +59,6 @@ class ChatConsumer(WebsocketConsumer):
         if data_source == 'friend.list':
             self.receive_friend_list(data)
 
-        # Send key to user
-        elif data_source == 'dh_public_key':
-            self.receive_dh_public_key(data)
-
         # Message list
         elif data_source == 'message.list': 
             self.receive_message_list(data)
@@ -119,19 +115,6 @@ class ChatConsumer(WebsocketConsumer):
         # Send back to sender
         self.send_group(user.username, 'friend.list', serialized.data)
 
-    def receive_dh_public_key(self, data):
-        target_username = data.get('username')
-        user_public_key = data.get('public_key')
-        
-        if not target_username or not user_public_key:
-            return
-        
-        data = {
-            'username': self.username,
-            'public_key': user_public_key
-        }
-        self.send_group(target_username, 'dh_public_key', data)
-
     def receive_message_list(self, data):
         user = self.scope['user']
         connectionID = data.get('connectionID')
@@ -185,10 +168,10 @@ class ChatConsumer(WebsocketConsumer):
         if connection.sender == user:
             recipient = connection.receiver
 
-        # Send new message back to sender (with plaintext for display)
+        # Send new message back to sender
         serialized_message = MessageSerializer(message, context={ 'user': user })
         message_data = serialized_message.data
-        # Use the plaintext we received from client (encrypted with own key)
+        # Use the plaintext we received from client
         serialized_friend = UserSerializer(recipient)
         data = {
             'message': message_data,

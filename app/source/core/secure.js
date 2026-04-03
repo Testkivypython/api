@@ -36,8 +36,6 @@ async function wipe() {
     try {
         await remove('credentials');
         await remove('tokens');
-        await remove('ecdh_private_key');
-        await remove('ecdh_public_key');
         console.log('All secure storage wiped');
     } catch (error) {
         console.log('secure.wipe:', error);

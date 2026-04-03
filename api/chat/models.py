@@ -11,6 +11,10 @@ def upload_thumbnail(instance, filename):
 
 class User(AbstractUser):
     thumbnail = models.ImageField(upload_to=upload_thumbnail, null=True, blank=True)
+    email = models.EmailField(null=True, blank=True)
+    email_verified = models.BooleanField(default=False)
+    verification_code = models.CharField(max_length=6, null=True, blank=True)
+    code_expiry = models.DateTimeField(null=True, blank=True)
 
 class Connection(models.Model):
     sender = models.ForeignKey(User, related_name='sent_connections', on_delete=models.CASCADE)

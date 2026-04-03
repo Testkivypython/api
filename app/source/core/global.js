@@ -3,6 +3,7 @@ import secure from './secure'
 import API from './api'
 import { ADDRESS } from './api'
 import utils from './utils'
+import crypto from './crypto'
 
 // -----------------------------------------------
 //         Socket receive message handlers
@@ -156,35 +157,6 @@ function responseFriendThumbnail(set, get, userData) {
     })
 }
 
-function responseDhPublicKey(set, get, data) {
-    const { username, public_key } = data;
-    
-    // Найти connection ID для этого пользователя
-    const connection = get().friendList?.find(f => f.friend.username === username);
-    if (!connection) {
-        console.log('Connection not found for:', username);
-        return;
-    }
-    
-    // Вычислить общий ключ
-    crypto.deriveSharedSecret(crypto.getPrivateKey(), public_key)
-        .then(sharedSecret => crypto.deriveChatKey(sharedSecret, connection.id))
-        .then(aesKey => {
-            // Сохранить в secure store
-            crypto.saveChatKey(connection.id, aesKey);
-            
-            // Сохранить в состояние
-            const chatKeys = { ...get().chatKeys };
-            chatKeys[connection.id] = aesKey;
-            set({ chatKeys });
-            
-            console.log('DH key exchange completed for chat:', connection.id);
-        })
-        .catch(error => {
-            console.log('DH key exchange failed:', error);
-        });
-}
-
 const useGlobal = create((set, get) => ({
     // ------------------------------
     //         Initialization
@@ -212,14 +184,7 @@ const useGlobal = create((set, get) => ({
                 const user = response.data.user
                 const token = response.data.tokens
 
-                await secure.set('tokens', token)
-
-                const hasKeys = await crypto.hasKeys()
-                console.log('Server has public key, local keys:', hasKeys)
-                
-                if (!hasKeys) {
-                    await crypto.generateECDHKeyPair();
-                }
+                await secure.set('tokens', token)                
 
                 set((state) => ({
                     initialized: true,
@@ -246,11 +211,6 @@ const useGlobal = create((set, get) => ({
     login: async (credentials, user, tokens) => {
         await secure.set('credentials', credentials)
         await secure.set('tokens', tokens)
-
-        const hasKeys = await crypto.hasKeys();
-        if (!hasKeys) {
-            await crypto.generateECDHKeyPair();
-        }
         
         set((state) => ({
             authenticated: true,
@@ -271,39 +231,20 @@ const useGlobal = create((set, get) => ({
     // ------------------------------
     
     socket: null,
-    socketId: 0,
 
     socketConnect: async () => {
-        console.log('socketConnect CALLED')
-        const currentSocket = get().socket
-        console.log('socketConnect: current state:', currentSocket?.readyState)
-        
-        if (currentSocket && (currentSocket.readyState === WebSocket.OPEN || currentSocket.readyState === WebSocket.CONNECTING)) {
-            console.log('socketConnect: Already connected or connecting, returning')
-            return
-        }
-        
-        // Clear stale socket reference if exists
-        if (currentSocket && (currentSocket.readyState === WebSocket.CLOSED || currentSocket.readyState === WebSocket.CLOSING)) {
-            set((state) => ({ socket: null }))
-        }
-        
         const tokens = await secure.get('tokens')
         
         if (!tokens?.access) {
-            console.log('socketConnect: No access token')
             return
         }
 
         const url = `wss://${ADDRESS}/chat/?token=${tokens.access}`
-        const currentSocketId = get().socketId + 1
-        set((state) => ({ socketId: currentSocketId }))
 
         const socket = new WebSocket(url)
-        console.log('socket created, id:', currentSocketId, 'url:', socket.url)
         socket.onopen = () => {
-            console.log('Socket connected, id:', currentSocketId)
-            set((state) => ({ socketReconnecting: false, socketReconnectAttempts: 0 }))
+            console.log('socket connected')
+
             socket.send(JSON.stringify({ source: 'request.list' }))
             socket.send(JSON.stringify({ source: 'friend.list' }))
         }
@@ -311,7 +252,6 @@ const useGlobal = create((set, get) => ({
             console.log('Socket closed, code:', event.code, 'id:', currentSocketId, 'reason:', event.reason)
             // Clear socket from state
             set((state) => ({ socket: null }))
-
         }
         socket.onerror = (error) => {
             console.log('Socket error:', error)
@@ -335,7 +275,6 @@ const useGlobal = create((set, get) => ({
                 'search': responseSearch,
                 'thumbnail': responseThumbnail,
                 'friend.thumbnail': responseFriendThumbnail,
-                'dh_public_key': responseDhPublicKey
             }
             const resp = responses[parsed.source]
             if (!resp) {
@@ -348,15 +287,11 @@ const useGlobal = create((set, get) => ({
         set((state) => ({
             socket: socket
         }))
-
-        utils.log('TOKENS: ', tokens)
     },
 
     socketClose: () => {
-        console.log('socketClose called')
         const socket = get().socket
         if (socket) {
-            console.log('Closing socket')
             socket.close()
         }
         set((state) => ({
@@ -434,32 +369,6 @@ const useGlobal = create((set, get) => ({
     messagesUsername: null,
     messagesTyping: null,
 
-    // ------------------------------
-    //            Encryption
-    // ------------------------------
-    chatKeys: {}, 
-
-    exchangeDhKeys: async (connectionId, friendUsername) => {
-        const socket = get().socket;
-        const myPublicKey = await crypto.getPublicKey();
-        
-        socket.send(JSON.stringify({
-            source: 'dh_public_key',
-            username: friendUsername,
-            public_key: myPublicKey
-        }));
-    },
-    requestChatKey: (connectionId) => {
-        // Загрузить ключ из secure store если есть
-        crypto.getChatKey(connectionId).then(key => {
-            if (key) {
-                const chatKeys = { ...get().chatKeys };
-                chatKeys[connectionId] = key;
-                set({ chatKeys });
-            }
-        });
-    },
-
     messageList: (connectionID, page = 0) => {
         if (page === 0) {
             set((state) => ({
@@ -478,26 +387,8 @@ const useGlobal = create((set, get) => ({
 
     messageSend: async (connectionID, message) => {
         const socket = get().socket;
-        const aesKey = get().chatKeys[connectionID];
         
         let messageData = message;
-        
-        if (aesKey) {
-            // Шифровать сообщение
-            try {
-                const encrypted = await crypto.encrypt(message, aesKey);
-                messageData = JSON.stringify(encrypted);
-            } catch (e) {
-                console.log('Encryption failed:', e);
-                // Блокируем отправку если шифрование не удалось
-                console.warn('Message blocked: encryption failed');
-                return;
-            }
-        } else {
-            // Ключ недоступен - блокировать отправку
-            console.warn('Message blocked: no chat key for connection', connectionID);
-            return;
-        }
         
         socket.send(JSON.stringify({
             source: 'message.send',

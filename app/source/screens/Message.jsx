@@ -157,45 +157,10 @@ function MessageBubbleFriend({ text='', friend, typing=false, refreshKey }) {
     )
 }
 
-function MessageBubble({ message, friend, index, refreshKey }) {
+function MessageBubble({ message, friend, index, refreshKey, connectionID }) {
     const [showTyping, setShowTyping] = useState(false)
-    const [decryptedText, setDecryptedText] = useState('')
-    const [isDecrypting, setIsDecrypting] = useState(false);
 
     const messagesTyping = useGlobal(state => state.messagesTyping)
-
-    useEffect(() => {
-        async function decryptMessage() {
-            if (index === 0) return;
-            if (message.is_me) {
-                setDecryptedText(message.text);
-                return;
-            }
-            
-            setIsDecrypting(true);
-            
-            const chatKeys = useGlobal.getState().chatKeys;
-            const aesKey = chatKeys[connectionID];
-            
-            if (aesKey && message.text.startsWith('{')) {
-                try {
-                    const encryptedData = JSON.parse(message.text);
-                    const decrypted = await crypto.decrypt(encryptedData, aesKey);
-                    setDecryptedText(decrypted);
-                } catch (e) {
-                    console.log('Decryption failed, showing as plaintext:', e);
-                    setDecryptedText(message.text);
-                }
-            } else {
-                // Сообщение не зашифровано (от старой версии)
-                setDecryptedText(message.text);
-            }
-            
-            setIsDecrypting(false);
-        }
-        
-        decryptMessage();
-    }, [message.text, index]);
 
     useEffect(() => {
         if (index !== 0) return
@@ -270,7 +235,6 @@ function MessagesScreen({ navigation, route }) {
     const messageSend = useGlobal(state => state.messageSend)
     const messageList = useGlobal(state => state.messageList)
     const messageType = useGlobal(state => state.messageType)
-    const getFriendPublicKey = useGlobal(state => state.getFriendPublicKey)
 
     const connectionID = route.params.id
     const friend = route.params.friend
@@ -292,15 +256,6 @@ function MessagesScreen({ navigation, route }) {
 
     useEffect(() => {
         messageList(connectionID)
-        // Запросить ключ собеседника
-        const exchangeDhKeys = useGlobal(state => state.exchangeDhKeys);
-        const requestChatKey = useGlobal(state => state.requestChatKey);
-        
-        // Попробовать загрузить существующий ключ
-        requestChatKey(connectionID);
-        
-        // Обменяться ключами с собеседником
-        exchangeDhKeys(connectionID, friend.username);
     }, [])
 
     useEffect(() => {
@@ -342,6 +297,7 @@ function MessagesScreen({ navigation, route }) {
                                 message={item}
                                 friend={friend}
                                 refreshKey={refreshKey}
+                                connectionID={connectionID}
                             />
                         )}
                     />

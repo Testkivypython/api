@@ -1,11 +1,16 @@
 from rest_framework import serializers
+from django.utils import timezone
 
 from .models import Connection, User, Message
 
 class SignUpSerializer(serializers.ModelSerializer):
+    code = serializers.CharField(write_only=True, required=False)
+
     class Meta:
         model = User
         fields = [
+            'email',
+            'code',
             'username',
             'first_name',
             'last_name',
@@ -13,22 +18,34 @@ class SignUpSerializer(serializers.ModelSerializer):
         ]
         extra_kwargs = {
             'password': {
-                # Enssures that when serealizing, this field will be excluded
                 'write_only': True
             }
         }
 
     def create(self, validated_data):
-        # clean all values, set as lowercase
+        email = validated_data.get('email').lower()
+        code = validated_data.pop('code', None)
+
+        if code:
+            try:
+                temp_user = User.objects.get(email=email)
+                if temp_user.verification_code != code:
+                    raise serializers.ValidationError({'code': 'Invalid verification code'})
+                if temp_user.code_expiry and temp_user.code_expiry < timezone.now():
+                    raise serializers.ValidationError({'code': 'Verification code expired'})
+            except User.DoesNotExist:
+                raise serializers.ValidationError({'email': 'Email not found'})
+
         username = validated_data.get('username').lower()
         first_name = validated_data.get('first_name').lower()
         last_name = validated_data.get('last_name').lower()
         
-        # create new user
         user = User.objects.create(
-                username=username,
-                first_name=first_name,
-                last_name=last_name
+            username=username,
+            email=email,
+            first_name=first_name,
+            last_name=last_name,
+            email_verified=True
         )
         password = validated_data['password']
         user.set_password(password)
@@ -43,8 +60,7 @@ class UserSerializer(serializers.ModelSerializer):
         fields = [
             'username',
             'name',
-            'thumbnail',
-            'public_key'
+            'thumbnail'
         ]
 
     def get_name(self, obj):
@@ -136,16 +152,10 @@ class MessageSerializer(serializers.ModelSerializer):
         model = Message
         fields = [
             'id',
-            'text',
-            'text_for_sender',
+            'text'
             'created',
             'is_me'
         ]
     
     def get_is_me(self, obj):
         return self.context['user'] == obj.user
-
-class PublicKeySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = User
-        fields = ['username', 'public_key']

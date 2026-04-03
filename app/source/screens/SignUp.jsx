@@ -1,4 +1,4 @@
-import { Text, View, TouchableWithoutFeedback, Keyboard, KeyboardAvoidingView } from 'react-native'
+import { Text, View, TouchableWithoutFeedback, Keyboard, KeyboardAvoidingView, ActivityIndicator } from 'react-native'
 import { useLayoutEffect, useState } from 'react'
 import Input from '../common/input'
 import Button from '../common/button'
@@ -9,17 +9,25 @@ import utils from '../core/utils'
 import useGlobal from '../core/global'
 
 function SignUpScreen({ navigation }) {
+    const [step, setStep] = useState(1)
+    const [email, setEmail] = useState('')
+    const [code, setCode] = useState('')
     const [username, setUsername] = useState('')
     const [firstName, setFirstName] = useState('')
     const [lastName, setLastName] = useState('')
     const [password1, setPassword1] = useState('')
     const [password2, setPassword2] = useState('')
 
+    const [emailError, setEmailError] = useState('')
+    const [codeError, setCodeError] = useState('')
     const [usernameError, setUsernameError] = useState('')
     const [firstNameError, setFirstNameError] = useState('')
     const [lastNameError, setLastNameError] = useState('')
     const [password1Error, setPassword1Error] = useState('')
     const [password2Error, setPassword2Error] = useState('')
+
+    const [loading, setLoading] = useState(false)
+    const [emailSent, setEmailSent] = useState(false)
 
     const login = useGlobal((state) => state.login)
 
@@ -29,48 +37,78 @@ function SignUpScreen({ navigation }) {
         });
     }, [])
 
-    function onSignUp(){
-        // Check username
+    function validateEmail(email) {
+        const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+        return re.test(email)
+    }
+
+    function onRequestCode() {
+        const failEmail = !email || !validateEmail(email)
+        if (failEmail) {
+            setEmailError('Please enter a valid email')
+            return
+        }
+
+        setLoading(true)
+        API({
+            method: 'POST',
+            url: '/chat/request-verification/',
+            data: { email }
+        }).then(response => {
+            setLoading(false)
+            setEmailSent(true)
+            setStep(2)
+        }).catch(error => {
+            setLoading(false)
+            const msg = error.response?.data?.error || 'Failed to send code'
+            setEmailError(msg)
+        })
+    }
+
+    function onSignUp() {
+        const failCode = !code || code.length !== 6
+        if (failCode) {
+            setCodeError('Code must be 6 digits')
+        }
+
         const failUsername = !username || username.length < 5
-        if(failUsername){
+        if (failUsername) {
             setUsernameError('Username must be at least 5 characters')
         }
 
-        // Check first Name
         const failFirstName = !firstName
-        if(failFirstName){
+        if (failFirstName) {
             setFirstNameError('First Name was not provided')
         }
 
-        // Check password1
         const failPassword1 = !password1 || password1.length < 8
         if (failPassword1) {
             setPassword1Error('Password must be at least 8 characters')
         }
 
-        // Check password2
         const failPassword2 = password1 !== password2
         if (failPassword2) {
             setPassword2Error('Passwords don\'t match')
         }
 
-        // Break out of this function if there were any issues
-        if (failUsername || failFirstName || failPassword1 || failPassword2) {
+        if (failCode || failUsername || failFirstName || failPassword1 || failPassword2) {
             return
         }
 
-        // TODO: make signup request
-        
+        setLoading(true)
         API({
             method: 'POST',
             url: '/chat/signup/',
             data: {
+                email: email,
+                code: code,
                 username: username,
                 first_name: firstName,
                 last_name: lastName,
                 password: password1
             }
         }).then(response => {
+            setLoading(false)
             utils.log('Sign Up Response:', response.data)
             const credentials = {
                 username: username,
@@ -79,10 +117,16 @@ function SignUpScreen({ navigation }) {
             
             login(credentials, response.data.user, response.data.tokens)
         }).catch(error => {
+            setLoading(false)
             if (error.response) {
-                console.log(error.response.data)
-                console.log(error.response.status)
-                console.log(error.response.headers)
+                const data = error.response.data
+                if (data.code) {
+                    setCodeError(data.code[0])
+                } else if (data.email) {
+                    setEmailError(data.email[0])
+                } else {
+                    console.log(data)
+                }
             }
             else if (error.request) {
                 console.log(error.request)
@@ -90,7 +134,6 @@ function SignUpScreen({ navigation }) {
             else {
                 console.log('Error', error.message)
             }
-            console.log(error.config)
         })
     }
 
@@ -100,48 +143,93 @@ function SignUpScreen({ navigation }) {
                 <TouchableWithoutFeedback onPress={Keyboard.dismiss}> 
                     <View style = {{flex: 1, justifyContent: 'center', paddingHorizontal: 16}}>
                         <Text style = {{ textAlign: 'center', fontSize: 36, fontWeight: 'bold', marginVertical: 30 }}>
-                            Sign Up
+                            {step === 1 ? 'Enter Email' : 'Verify & Sign Up'}
                         </Text>
 
-                        <Input 
-                            title='Username'
-                            value={username}
-                            error={usernameError}
-                            setValue={setUsername}
-                            setError={setUsernameError}
-                        />
-                        <Input 
-                            title='First Name'
-                            value={firstName}
-                            error={firstNameError}
-                            setValue={setFirstName}
-                            setError={setFirstNameError}
-                        />
-                        <Input 
-                            title='Last Name (optional)'
-                            value={lastName}
-                            error={lastNameError}
-                            setValue={setLastName}
-                            setError={setLastNameError}
-                        />
-                        <Input 
-                            title='Password' 
-                            value={password1}
-                            error={password1Error}
-                            setValue={setPassword1}
-                            setError={setPassword1Error}
-                            secureTextEntry={true}
-                        />
-                        <Input
-                            title='Retype Password' 
-                            value={password2}
-                            error={password2Error}
-                            setValue={setPassword2}
-                            setError={setPassword2Error}
-                            secureTextEntry={true}
-                        />
+                        {step === 1 ? (
+                            <>
+                                <Input 
+                                    title='Email'
+                                    value={email}
+                                    error={emailError}
+                                    setValue={setEmail}
+                                    setError={setEmailError}
+                                    autoCapitalize='none'
+                                    keyboardType='email-address'
+                                />
+                                <Button 
+                                    title={loading ? 'Sending...' : 'Send Code'} 
+                                    onPress={onRequestCode}
+                                    disabled={loading}
+                                />
+                            </>
+                        ) : (
+                            <>
+                                <Text style={{ textAlign: 'center', marginBottom: 20, color: '#666' }}>
+                                    Code sent to {email}
+                                </Text>
+                                <Input 
+                                    title='Verification Code'
+                                    value={code}
+                                    error={codeError}
+                                    setValue={setCode}
+                                    setError={setCodeError}
+                                    keyboardType='numeric'
+                                    maxLength={6}
+                                />
+                                <Input 
+                                    title='Username'
+                                    value={username}
+                                    error={usernameError}
+                                    setValue={setUsername}
+                                    setError={setUsernameError}
+                                    autoCapitalize='none'
+                                />
+                                <Input 
+                                    title='First Name'
+                                    value={firstName}
+                                    error={firstNameError}
+                                    setValue={setFirstName}
+                                    setError={setFirstNameError}
+                                />
+                                <Input 
+                                    title='Last Name (optional)'
+                                    value={lastName}
+                                    error={lastNameError}
+                                    setValue={setLastName}
+                                    setError={setLastNameError}
+                                />
+                                <Input 
+                                    title='Password' 
+                                    value={password1}
+                                    error={password1Error}
+                                    setValue={setPassword1}
+                                    setError={setPassword1Error}
+                                    secureTextEntry={true}
+                                />
+                                <Input
+                                    title='Retype Password' 
+                                    value={password2}
+                                    error={password2Error}
+                                    setValue={setPassword2}
+                                    setError={setPassword2Error}
+                                    secureTextEntry={true}
+                                />
 
-                        <Button title='Sign Up' onPress={onSignUp} />
+                                <Button 
+                                    title={loading ? 'Signing Up...' : 'Sign Up'} 
+                                    onPress={onSignUp}
+                                    disabled={loading}
+                                />
+                                
+                                <Text 
+                                    style={{ textAlign: 'center', marginTop: 15, color: 'blue' }}
+                                    onPress={() => { setStep(1); setEmailSent(false); }}
+                                >
+                                    Change email
+                                </Text>
+                            </>
+                        )}
 
                         <Text style = {{ textAlign: 'center', marginVertical: 30 }}>
                             Already have an account? <Text style = {{ color: 'blue'}} onPress={() => navigation.goBack()}>Sign In</Text>
